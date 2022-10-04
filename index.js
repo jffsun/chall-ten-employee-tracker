@@ -5,6 +5,7 @@ const cTable = require('console.table');
 
 // Will store retrieved departments from db for user to select when adding a new position 
 const newPositionDepartments = [];
+var fullNames = '';
 
 // Inquirer prompts
 var menu = {
@@ -64,12 +65,8 @@ var updateEmpl = [
         type: 'list',
         name: 'updateEmpl',
         message: 'Which employee’s position would you like to update?',
-        // TO DO: Make dynamic and insert list of employees from Employee Table
-        choices: [
-            'John Smith', 
-            'Jane Doe',
-            '...'
-            ],
+        // Pulls list of employees from db's employees table
+        choices: fullNames
     },
     {
         type: 'list',
@@ -92,7 +89,7 @@ const addPosition = [
     },
     {
         type: 'input',
-        name: 'addPositionSalary ',
+        name: 'addPositionSalary',
         message: 'What is the salary of the position?',
     },
     {
@@ -110,8 +107,6 @@ var addDept = [
         message: 'What is the name of the department?',
     },
 ];
-
-
 
 // Connect to database
 const db = mysql.createConnection(
@@ -141,6 +136,25 @@ function ask() {
         // If user selects 'Update Employee Position'
         } else if (answer.menuAnswer == 'Update Employee Position') {
 
+            // Retrieve first and last employees names from db
+            db.query('SELECT employees.first_name, employees.last_name FROM employees', function (err, results) {
+                if (err) {
+                    console.log(err);
+                } 
+                console.log(results);
+                
+                // Iterate through employees retrieved and form array that joins employee's first_name and last_name
+                fullNames = results.map(employee => {
+                    return [employee.first_name,employee.last_name].join(" ");
+                });
+                console.log(fullNames);
+
+                inquirer.prompt(updateEmpl).then((answers) => {
+                    console.log(answers);
+                })
+            });
+
+
         // If user selects 'View All Positions'
         } else if (answer.menuAnswer == 'View All Positions') {
 
@@ -149,7 +163,6 @@ function ask() {
                 if (err) {
                     console.log(err);
                 }
-
                 // Show positions and departments table joined
                 const positionsDeptTable = cTable.getTable(results);
                 console.log(positionsDeptTable);
@@ -160,49 +173,41 @@ function ask() {
         
         // If user selects 'Add Position'
         } else if (answer.menuAnswer == 'Add Position') {
-            newPositionSQL = ``;
 
             // Retrieve department names and IDs from db
             db.query('SELECT * FROM departments', function (err, results) {
                 if (err) {
                     console.log(err);
                 }
-                console.log(results);
 
-                // Push each department retrieved from departments table, into the empty array 
+                // Push each department's name retrieved from departments table into array to be used as choices for inquirer prompt 
                 results.forEach(department => newPositionDepartments.push(department.department_name));
-                console.log(newPositionDepartments);
 
                 // Ask user to select from the departments retrieved
                 inquirer.prompt(addPosition).then((answers) => {
-                    console.log(answers);
+                    
+                    // New position answers to be used for raw SQL code
+                    const newPositionTitle = answers.addPositionTitle.trim();
+                    const newPositionSalary = answers.addPositionSalary;
 
-                    // New position answers to be used for SQL method
-                    const newPositionTitle = answer.addPositionTitle;
-                    const newPositionSalary = answer.addPositionSalary;
-                    const newPositionDept = answer.addPositionDept
-                    const newPositionDeptID = 
+                    // Index of user's selected department plus one to get department_id value 
+                    const newPositionDeptID = newPositionDepartments.indexOf(answers.addPositionDept) + 1;
 
-                    // TO DO: Picking department gets their Department ID, which will be used in raw code 
-                   
+                    // Raw SQL to be used for adding new record to positions table
+                    newPositionSQL = `INSERT INTO positions (title, salary, department_id)
+                    VALUES ("${newPositionTitle}", "${newPositionSalary}", ${newPositionDeptID});`;
+
+                    // Send new position to positions table in db
+                    db.query(newPositionSQL, function (err, results) {
+                        if (err) {
+                            console.log(err);
+                        }
+                        console.log('Position successsfully added!');
+                        ask();
+                    });
                 });
             });  
-            return;
-                              
-                // // Insert new position record into positions table 
-                
-                // db.query(newDeptSQL, function (err, results) {
-                //     if (err) {
-                //         console.log(err);
-                //     }
-                //     console.log('Department successsfully added!');
-                // });
-
-                // Ask menu prompt again
-                ask();
-            // });                
-            
-
+      
         // If user selects 'View All Departments'
         } else if (answer.menuAnswer == 'View All Departments') {
 
