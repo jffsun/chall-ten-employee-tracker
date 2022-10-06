@@ -5,7 +5,11 @@ const cTable = require('console.table');
 
 // Will store retrieved departments from db for user to select when adding a new position 
 const newPositionDepartments = [];
-var fullNames = '';
+const fullNames = [];
+const positionsTitles = [];
+const updateEmplPositionsIDs = [];
+const positionsIDs = [];
+const employeeIDs = [];
 
 // Inquirer prompts
 var menu = {
@@ -63,21 +67,17 @@ var addEmpl = [
 var updateEmpl = [
     {
         type: 'list',
-        name: 'updateEmpl',
+        name: 'updateEmplName',
         message: 'Which employee’s position would you like to update?',
-        // Pulls list of employees from db's employees table
+        // User chooses from all employees' names from employees table
         choices: fullNames
     },
     {
         type: 'list',
-        name: 'updateEmpl',
+        name: 'updateEmplNewPosition',
         message: 'Which position do you want to assign the selected employee?',
-        // TO DO: Make dynamic and insert list of positions from positions Table
-        choices: [
-            'Sales Person', 
-            'Leader engineer',
-            '...'
-            ],
+         // User chooses from positions' titles from positions table
+        choices: positionsTitles
     },
 ];
 
@@ -136,25 +136,71 @@ function ask() {
         // If user selects 'Update Employee Position'
         } else if (answer.menuAnswer == 'Update Employee Position') {
 
-            // Retrieve first and last employees names from db
-            db.query('SELECT employees.first_name, employees.last_name FROM employees', function (err, results) {
+            // Gets all employees' full names by querying for employees' first and last names concatenated
+            db.query(`SELECT CONCAT(c.first_name, ' ', c.last_name) AS full_name, c.* FROM employees c;`, function (err, results) {
                 if (err) {
                     console.log(err);
                 } 
-                console.log(results);
-                
-                // Iterate through employees retrieved and form array that joins employee's first_name and last_name
-                fullNames = results.map(employee => {
-                    return [employee.first_name,employee.last_name].join(" ");
+
+                // Push each employee's name to fullNames array to be used as choices for Inquirer
+                results.forEach(employee => {
+                    fullNames.push(employee.full_name);
+
+                    // Also push each employee's current position_id to an array to be used in UPDATE sql method
+                    // updateEmplPositionsIDs.push(employee.position_id);
+
+                    // Also push each employee's id to array to be used in UPDATE sql method
+                    employeeIDs.push(employee.id);
                 });
+                console.log(results);
                 console.log(fullNames);
+                console.log(employeeIDs);
 
-                inquirer.prompt(updateEmpl).then((answers) => {
-                    console.log(answers);
-                })
+                // Gets all positions_title and positions_ids
+                db.query('SELECT positions.title, positions.id FROM positions', function (err, results) {
+                    if (err) {
+                        console.log(err);
+                    }
+
+                    // Push each title to positionsTitles array to be used as choices for Inquirer
+                    results.forEach(position => {
+                        positionsTitles.push(position.title)
+
+                        // Push all position_ids to array to be used to reassign the employee a new position_id
+                        positionsIDs.push(position.id);
+                    });
+                
+                    // Ask user to pick an employee to update along with a new position
+                    inquirer.prompt(updateEmpl).then((answers) => {
+
+                        // Gets index of the selected employee in fullNames array to then find it's matching position_id
+                        // const j = fullNames.indexOf(answers.updateEmplName);
+
+                        const updatedEmployee = {
+
+                            // Name set to the employee that user selected
+                            name: answers.updateEmplName,
+
+                            // Uses index of the selected employee to find their current position_id
+                            // currentPositionID: updateEmplPositionsIDs[j],
+                            employeeID: fullNames.indexOf(answers.updateEmplName) + 1,
+
+                            // Uses index of the selected position to find new position's position_id
+                            newPositionID: positionsTitles.indexOf(answers.updateEmplNewPosition) + 1
+                        };
+                        console.log(updatedEmployee);
+                        db.query(`UPDATE employees SET position_id = ${newPositionID} WHERE id = ?`, function (err, results) {
+                            if (err) {
+                                console.log(err);
+                            }
+                        
+                        
+                        });
+
+                    });
+                });
             });
-
-
+           
         // If user selects 'View All Positions'
         } else if (answer.menuAnswer == 'View All Positions') {
 
@@ -186,6 +232,8 @@ function ask() {
                 // Ask user to select from the departments retrieved
                 inquirer.prompt(addPosition).then((answers) => {
                     
+                    // TO DO: Create object instead with new positions attributes 
+
                     // New position answers to be used for raw SQL code
                     const newPositionTitle = answers.addPositionTitle.trim();
                     const newPositionSalary = answers.addPositionSalary;
